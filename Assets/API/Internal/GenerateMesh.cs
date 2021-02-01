@@ -11,7 +11,8 @@ using UnityEngine.Rendering;
 using UnityEngine.Experimental.Rendering;
 using Unity.Burst;
 using Debug = UnityEngine.Debug;
-
+using System.Collections.Generic;
+using System.Reflection;
 
 // MeshRenderer per "mesh settings"/layer
 //      Meshes
@@ -23,7 +24,7 @@ using Debug = UnityEngine.Debug;
 //      Mesh
 
 
-[BurstCompatible]
+[BurstCompatible, Serializable]
 public struct ModelSettings
 {
     public readonly static ModelSettings Default = new ModelSettings
@@ -83,6 +84,7 @@ public struct ModelSettings
     //public UnityEditor.StaticEditorFlags  staticEditorFlags;              /// Describes which Unity systems include the GameObject in their precomputations (Editor only)
 }
 
+[Serializable]
 public enum DebugSurfaceType
 {
     None,           /// Not a debug surface type
@@ -93,7 +95,7 @@ public enum DebugSurfaceType
     Culled          /// Mesh holding all surfaces that are culled
 }
 
-[BurstCompatible]
+[BurstCompatible, Serializable]
 public struct RenderSurfaceSettings : IChiselHash
 {
     public readonly static RenderSurfaceSettings DebugCastShadows       = new RenderSurfaceSettings(DebugSurfaceType.CastShadows);
@@ -101,7 +103,7 @@ public struct RenderSurfaceSettings : IChiselHash
     public readonly static RenderSurfaceSettings DebugReceiveShadows    = new RenderSurfaceSettings(DebugSurfaceType.ReceiveShadows);
     public readonly static RenderSurfaceSettings DebugColliders         = new RenderSurfaceSettings(DebugSurfaceType.Colliders);
     public readonly static RenderSurfaceSettings DebugCulled            = new RenderSurfaceSettings(DebugSurfaceType.Culled);
-    public readonly static RenderSurfaceSettings Default = new RenderSurfaceSettings
+    public readonly static RenderSurfaceSettings Default                = new RenderSurfaceSettings
     {
         layer               = 0,
         renderingLayerMask  = 0,
@@ -146,18 +148,16 @@ public struct RenderSurfaceSettings : IChiselHash
                 return math.hash(new uint4((uint)layer, renderingLayerMask, (uint)shadowCastingMode | (receiveShadows ? 65536u : 0u), (uint)debugSurfaceType));
         }
     }
-
-    [BurstDiscard] public override string ToString() { return ChiselObjectNames.GetName(this); }
 }
 
-[BurstCompatible]
+[BurstCompatible, Serializable]
 public struct RenderSurfaceGroup 
 {
     public RenderSurfaceSettings    settings;
     public NativeList<int>          materialInstanceIDs;
 }
 
-[BurstCompatible]
+[BurstCompatible, Serializable]
 public struct ColliderSurfaceSettings : IChiselHash
 {
     public readonly static ColliderSurfaceSettings Default = new ColliderSurfaceSettings { layer = 0 };
@@ -166,11 +166,9 @@ public struct ColliderSurfaceSettings : IChiselHash
     public int layer;              /// The layer the game object is in. 
 
     public uint GetHash() { unchecked { return (uint)layer; } }
-    
-    [BurstDiscard] public override string ToString() { return ChiselObjectNames.GetName(this); }
 }
 
-[BurstCompatible]
+[BurstCompatible, Serializable]
 public struct ColliderSurfaceGroup
 {
     public ColliderSurfaceSettings  settings;
@@ -303,7 +301,7 @@ public struct GeneratedSurfaceManager
             surfaceGroups[surfaceGroupIndex].UpdateModifiedSurfaceProperties();
     }
 
-    public void EnsureSurfaceGroups(in NativeList<SubModel> subModels, in Model model)
+    public void EnsureSurfaceGroups(in NativeList<ChiselCSGSubModel> subModels, in ChiselCSGModel model)
     {
         // TODO: ensure we have the right surfaceGroups
         var surfaceGroupsLength = this.surfaceGroups.Length;
@@ -325,7 +323,7 @@ public struct GeneratedSurfaceManager
 }
 
 
-static class MeshDataArrayExtensions
+static unsafe class MeshDataArrayExtensions
 {
     public static NativeList<Mesh.MeshData> ToNativeArray(this Mesh.MeshDataArray meshDataArray, Allocator allocator)
     {
@@ -341,4 +339,45 @@ static class MeshDataArrayExtensions
             destination[i] = meshDataArray[i];
     }
 
+    delegate void ApplyToMeshesImplDelegate(Mesh[] meshes, IntPtr* datas, int count, MeshUpdateFlags flags);
+
+    static readonly ApplyToMeshesImplDelegate ApplyToMeshesImpl = (ApplyToMeshesImplDelegate)Delegate.CreateDelegate(typeof(ApplyToMeshesImplDelegate), null, typeof(Mesh.MeshDataArray).GetMethod("ApplyToMeshesImpl", BindingFlags.NonPublic | BindingFlags.Static), true);
+
+    //struct PtrStruct { public IntPtr m_Ptr; }
+
+    public static unsafe void ApplyAndDisposeWritableMeshData(this Mesh.MeshDataArray @this, Mesh[] meshes, int realLength, MeshUpdateFlags flags = MeshUpdateFlags.Default)
+    {
+        if (meshes == null)
+            throw new ArgumentNullException(nameof(meshes), "Mesh list is null");
+        if (@this.Length < realLength)
+            throw new InvalidOperationException($"{nameof(Mesh.MeshDataArray)} length ({@this.Length}) cannot be less than destination meshes length ({realLength})");
+        if (meshes.Length < realLength)
+            throw new InvalidOperationException($"{nameof(meshes)} length ({meshes.Length}) cannot be less than destination meshes length ({realLength})");
+        if (realLength == 0)
+        {
+            @this.Dispose();
+            return;
+        } 
+
+        for (int i = 0; i < realLength; ++i)
+        {
+            Mesh m = meshes[i];
+            if (m == null)
+                throw new ArgumentNullException(nameof(meshes), $"Mesh at index {i} is null");
+        }
+
+        // UNTESTED
+        var ptrs = (IntPtr*)UnsafeUtility.AddressOf(ref @this); // First value of Mesh.MeshDataArray should be IntPtr*
+        /*
+        var ptrs = stackalloc IntPtr[realLength];
+        for (int i = 0; i < realLength; i++)
+        {
+            var meshData = @this[i];
+            //ptrs[i] = ((PtrStruct*)&meshData)->m_Ptr;
+            ptrs[i] = *((IntPtr*)&meshData);
+        }*/
+
+        ApplyToMeshesImpl(meshes, ptrs, realLength, flags);
+        @this.Dispose();
+    }
 }

@@ -33,12 +33,14 @@ using Debug = UnityEngine.Debug;
 // decals
 
 
-struct ChiselManager
+partial struct ChiselManager
 {
-    public int ModelCount { get { return models.Length; } }
-    public unsafe Model GetModelAt(int index) { return models[index]; }
+    public static int GetMaximumMeshCount() { throw new NotImplementedException(); }
 
-    NativeList<Model>  models;
+    public int ModelCount { get { return models.Length; } }
+    public unsafe ChiselCSGModel GetModelAt(int index) { return models[index]; }
+
+    NativeList<ChiselCSGModel>  models;
     NativeList<uint>   modelHashes;
 
     // When something is modified, their hash changes, and their parents hash changes etc.
@@ -70,7 +72,7 @@ struct ChiselManager
         }
     }
 
-    void UpdateModel(Model model)
+    void UpdateModel(ChiselCSGModel model)
     {
         // From outside this method:
         //      - query the maximum required meshes
@@ -388,7 +390,7 @@ public struct RoutingTable : IChiselHash
 
     public struct BrushDescription
     {
-        public Brush            brush;
+        public ChiselCSGBrush            brush;
         public ChiselTransformation   transformation;
     }
 
@@ -429,7 +431,7 @@ public struct CompactTree
     public NativeArray<ChiselTransformation>  transformations;
     public NativeArray<BrushDescription>      brushes;
 
-    public void UpdatePackedHierarchy([ReadOnly] in Model model)
+    public void UpdatePackedHierarchy([ReadOnly] in ChiselCSGModel model)
     {
         throw new NotImplementedException();
     }
