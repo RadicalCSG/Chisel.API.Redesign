@@ -13,6 +13,56 @@ using Unity.Burst;
 using Debug = UnityEngine.Debug;
 using System.Collections.Generic;
 
+
+// This file holds the glue between the Core API and the GameObject world, this might be moved outside the API, 
+// but it's necessary here to inform us what the Core API needs
+//
+// One complication is that the most efficient way to fill a Mesh, is using MeshDataArray.
+// Unfortunately MeshDataArray requires us to know exactly the maximum number of Meshes we need up front.
+//
+// This makes it necessary to make the number of meshes as predictable as possible, 
+// and to register all types of surfaces we're using up front, and keep track of which meshes we might need.
+// Keep in mind that even though we might have some surface descriptions, those surfaces might be completely 
+// removed by the CSG algorithm and will generate empty meshes.
+//
+// Rough outline of what happens below
+//  * MeshRenderers have certain settings such as "shadowCastingMode" & "receiveShadows" that we 
+//      want to expose to individual surfaces. This means we need a MeshRenderer for each of the possible
+//      combinations of these settings.
+//  * MeshRenderers have a 1:1 relationship with MeshFilter (which holds the Mesh), 
+//      which limits 1 MeshRenderer to each GameObject, so we need a GameObject per MeshRenderer.
+//  * A renderable mesh can have submeshes, each submesh can have its own Material, 
+//      so we can combine them together to limit the number of MeshRenderers/GameObjects we need to manage.
+//
+//  * MeshColliders need 1 Mesh per PhysicMaterial and cannot be combined, 
+//      so we need 1 MeshCollider per PhysicMaterial
+//  * However, it's possible to have multiple MeshColliders per GameObject, 
+//      so we only need 1 GameObject for all MeshColliders
+//  
+//  * Models hold multiple GameObjects for all the MeshRenderers and MeshColliders it generates
+//  * SubModels allow us to split the meshes for a model into more fine grained pieces. This is useful for culling.
+//  * Just like models, submodels have GameObjects for all the MeshRenderers and MeshColliders it generates 
+//  * All surfaces that belong to brushes that are children of a submodel, 
+//      will be put in it's Meshes, instead of the Meshes of the Model
+//  * Q: We *might* need to put the GameObjects of the SubModels underneath the model, 
+//      to avoid floating point inaccuracies in case SubModels have an offset compared to the model
+//  * Q: It *might* not make sense to subdivide MeshColliders with SubModels, but only MeshRenderers?
+//
+// Higher level outline
+//  * Hierarchy is defined somewhere
+//  * Brushes and surfaces on leaves are registered, letting us know what meshes we potentially need to generate. 
+//      Some preprocessing (transformations are updated) and caching happens at this phase
+//  * We ask the API let us know which types of meshes need to be generated, and get a unique hash for each mesh that needs to be generated
+//      * This hash is generated based on the input that defines the mesh. If the input doesn't change, the output shouldn't change either
+//  * We use the code below to create/update the MeshRenderers/MeshColliders/Meshes and their GameObjects.
+//      * Q: We know which materials our MeshRenderers need, but we might want to not set Materials for submeshes that turn out to be empty?
+//  * We then give a list of specific meshes (from those MeshRenderers/MeshColliders) with specific descriptions, and ask the API to generate those meshes
+//      * CSG is applied on all modified brushes, caches are updated, meshes are filled
+//
+//  TODO: need default model support for when people don't put generators/composites outside a model
+
+
+// Holds a MeshRenderer with the given settings for a specific Model/SubModel 
 public class RenderSurfaceGroupComponents
 {
     public RenderSurfaceSettings settings;
@@ -22,31 +72,37 @@ public class RenderSurfaceGroupComponents
     public Mesh                  mesh;
 }
 
+// Holds all Colliders with the given settings for a specific Model/SubModel
+// Each collider will have it's own PhysicMaterial
 public class ColliderCollection
 {
     public ColliderSurfaceSettings  settings;
     public GameObject               gameObject;
-    public readonly List<Mesh>      meshes = new List<Mesh>();
     public readonly Dictionary<PhysicMaterial, MeshCollider> meshColliders = new Dictionary<PhysicMaterial, MeshCollider>();
+    public readonly List<Mesh> meshes = new List<Mesh>();
 }
 
 // TODO: put this inside model >component<
+// TODO: need a way to get the modelsettings of a model
+// TODO: need a way to find all RenderSurfaceSettings/ColliderSurfaceSettings in a model
+// TODO: need a way to find all >modified< RenderSurfaceGroups/ColliderSurfaceGroups
+// Holds ALL generated gameobjects/meshrenderers etc.
+// Also holds the model specific settings, and the GameObject (& its cached transform) that's a wrapper around the generated GameObjects
 public class ModelState
 {
-    public GameObject       containerGameObject;
-    public Transform        containerTransform;
-    public ModelSettings    settings;
+    public ModelSettings    settings;               // Needs to be serialized with the Model
+
+    public GameObject       containerGameObject;    // Make readonly?
+    public Transform        containerTransform;     // Make readonly?
 
     public readonly List<RenderSurfaceGroupComponents>   renderSurfaceGroupComponents    = new List<RenderSurfaceGroupComponents>();
     public readonly List<ColliderCollection>             colliderCollections             = new List<ColliderCollection>();
 }
 
-// TODO: need place to hold ALL generated gameobjects/meshrenderers etc.
-// TODO: need a way to get the modelsettings of a model
-// TODO: need a way to find all RenderSurfaceSettings/ColliderSurfaceSettings in a model
-// TODO: need a way to find all >modified< RenderSurfaceGroups/ColliderSurfaceGroups
 public class GameObjectManager
 {
+    const string kGeneratedGameObjectContainerName = "‹[generated]›";
+
     public static ModelState CreateModelState(GameObject modelGameObject, ModelSettings settings)
     {
         var activeState = modelGameObject.activeSelf;
@@ -54,7 +110,7 @@ public class GameObjectManager
         try
         {
             var modelTransform = modelGameObject.transform;
-            var containerGameObject = new GameObject("<GENERATED>"); // TODO: better name
+            var containerGameObject = new GameObject(kGeneratedGameObjectContainerName);
             var containerTransform = containerGameObject.transform;
             SetParent(containerTransform, modelTransform);
             containerTransform.SetParent(modelTransform, false);
