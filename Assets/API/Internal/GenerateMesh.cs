@@ -112,11 +112,14 @@ public struct RenderSurfaceSettings : IChiselHash
 
     public DebugSurfaceType     debugSurfaceType;
 
+    // TODO: how do "layer" and "renderingLayerMask" relate to each other? 
+    //       "renderingLayerMask" is SRP only, does it completely replace "layer" there?
+
     // GameObject
     public int                  layer;              /// The layer the game object is in. 
 
     // MeshRenderer
-    public uint                 renderingLayerMask; /// Determines which rendering layer this renderer lives on.
+    public uint                 renderingLayerMask; /// Determines which rendering layer this renderer lives on. (SRP only)
     public ShadowCastingMode    shadowCastingMode;  /// Does this object cast shadows?
     public bool                 receiveShadows;     /// Does this object receive shadows?
 
