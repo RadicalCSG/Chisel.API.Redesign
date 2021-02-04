@@ -19,24 +19,24 @@ public static class ChiselObjectNames
     /// <summary>
     /// Returns a name that represents a given renderable surface (used for MeshRenderer GameObject and its mesh)
     /// </summary>
-    public static string GetName(RenderSurfaceSettings settings)
+    public static string GetName(in GeneratedComponentGroup generatedComponentGroup, in RenderSurfaceSettings renderSettings)
     {
-        if (settings.debugSurfaceType != DebugSurfaceType.None)
-            return $"[Debug|{settings.debugSurfaceType}]";
+        if (renderSettings.debugSurfaceType != DebugSurfaceType.None)
+            return $"[Debug|{renderSettings.debugSurfaceType}]";
 
-        string receiveShadowsName = string.Empty;
-        string layerName = settings.layer == 0 ? string.Empty : $"|layer:{settings.layer}";
-        string renderingLayerMaskName = settings.renderingLayerMask == 0 ? string.Empty : $"|mask:{settings.renderingLayerMask}";
+        string receiveShadowsName       = string.Empty;
+        string layerName                = renderSettings.layer == 0 ? string.Empty : $"|layer:{renderSettings.layer}";
+        string renderingLayerMaskName   = renderSettings.renderingLayerMask == 0 ? string.Empty : $"|mask:{renderSettings.renderingLayerMask}";
         string shadowCastingModeName;
-        switch (settings.shadowCastingMode)
+        switch (renderSettings.shadowCastingMode)
         {
-            case ShadowCastingMode.Off: shadowCastingModeName = "|NoCastShadows"; break; // No shadows are cast from this object.
-            case ShadowCastingMode.On: shadowCastingModeName = "|CastShadows]"; break; // Shadows are cast from this object.
-            case ShadowCastingMode.TwoSided: shadowCastingModeName = "|TwoSidedCastShadows]"; break; // Shadows are cast from this object, treating it as two-sided.
-            case ShadowCastingMode.ShadowsOnly: shadowCastingModeName = "|ShadowsOnly]"; break; // Object casts shadows, but is otherwise invisible in the Scene.
+            case ShadowCastingMode.Off:         shadowCastingModeName = "|NoCastShadows";        break; // No shadows are cast from this object.
+            case ShadowCastingMode.On:          shadowCastingModeName = "|CastShadows]";         break; // Shadows are cast from this object.
+            case ShadowCastingMode.TwoSided:    shadowCastingModeName = "|TwoSidedCastShadows]"; break; // Shadows are cast from this object, treating it as two-sided.
+            case ShadowCastingMode.ShadowsOnly: shadowCastingModeName = "|ShadowsOnly]";         break; // Object casts shadows, but is otherwise invisible in the Scene.
             default: shadowCastingModeName = "|UNKNOWN]"; break;
         }
-        if (settings.shadowCastingMode != ShadowCastingMode.ShadowsOnly && settings.receiveShadows)
+        if (renderSettings.shadowCastingMode != ShadowCastingMode.ShadowsOnly && renderSettings.receiveShadows)
             receiveShadowsName = "ReceiveShadows";
         return $"[MeshRenderer{shadowCastingModeName}{receiveShadowsName}{layerName}{renderingLayerMaskName}]";
     }
@@ -44,10 +44,10 @@ public static class ChiselObjectNames
     /// <summary>
     /// Returns a name that represents a given collidable surface (used for MeshCollider GameObject)
     /// </summary>
-    public static string GetName(ColliderSurfaceSettings settings)
+    public static string GetName(in GeneratedComponentGroup generatedComponentGroup, in ColliderSurfaceSettings colliderSettings)
     {
-        if (settings.layer != 0) return $"[MeshColliders]";
-        else return $"[MeshColliders|layer:{settings.layer}]";
+        if (colliderSettings.layer != 0) return $"[MeshColliders]";
+        else return $"[MeshColliders|layer:{colliderSettings.layer}]";
     }
 
     /// <summary>

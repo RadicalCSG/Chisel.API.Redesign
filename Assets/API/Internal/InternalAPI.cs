@@ -10,20 +10,23 @@ using UnityEngine;
 using Unity.Burst;
 using Debug = UnityEngine.Debug;
 
-partial struct Model : IChiselContainer
+partial struct ChiselCSGModel : IChiselNodeContainer, IChiselMeshContainer, IDisposable
 {
     internal ChiselMeshManager                  chiselMeshes;
     internal ChiselIntersectionManager          intersections;
     internal GeneratedSurfaceManager            surfaces;
     internal CompactTree                        packedHierarchy;
     
-    internal NativeList<SubModel>               subModels;
-    internal int maximumRequiredMeshes;
+    internal NativeList<ChiselCSGSubModel>      subModels;
+    internal int    maximumRequiredMeshes;
 
     internal uint   selfCachedHash;
     internal uint   cachedHash;
 
-    public uint ModelID                 { get; }
+    internal bool   changed; // TODO: "Somehow" update this when *anything* in the model changes
+
+    public uint ModelID                 { get; private set; }
+    public uint MeshContainerID         { get; private set; }
     public int  ChildCount              { get { return 0; } }
     
     public ref  IChiselChild            GetChildAt(int index)           { throw new NotImplementedException(); }
@@ -31,7 +34,7 @@ partial struct Model : IChiselContainer
     public ref  Operation               GetChildOperationAt(int index)  { throw new NotImplementedException(); }
     
     public int  SubModelCount           { get { return subModels.Length; } }
-    public unsafe SubModel              GetSubModelAt(int index)        { return subModels[index]; }
+    public unsafe ChiselCSGSubModel              GetSubModelAt(int index)        { return subModels[index]; }
 
     uint GetSelfHash() { return 0; }
 
@@ -45,16 +48,27 @@ partial struct Model : IChiselContainer
         }
         return cachedHash;
     }
+
+    public void Dispose()
+    {
+        throw new NotImplementedException();
+    }
+
+    NativeList<RenderSurfaceSettings>           uniqueRenderSurfaceSettings;
+    public NativeList<RenderSurfaceSettings>    UniqueRenderSurfaceSettings     { get { return uniqueRenderSurfaceSettings; } }
+    NativeList<ColliderSurfaceSettings>         uniqueColliderSurfaceSettings;
+    public NativeList<ColliderSurfaceSettings>  UniqueColliderSurfaceSettings   { get { return uniqueColliderSurfaceSettings; } }
 }
 
 
-partial struct SubModel : IChiselChild, IChiselContainer
+partial struct ChiselCSGSubModel : IChiselChild, IChiselNodeContainer, IChiselMeshContainer, IDisposable
 {
     internal uint selfCachedHash;
     internal uint cachedHash;
     internal int maximumRequiredMeshes;
 
-    public uint SubModelID              { get; }
+    public uint SubModelID              { get; private set; }
+    public uint MeshContainerID         { get; private set; }
     public int  ChildCount              { get { return 0; } }
     public ref  IChiselChild            GetChildAt(int index) { throw new NotImplementedException(); }
     public ref  ChiselTransformation    GetChildTransformAt(int index) { throw new NotImplementedException(); }
@@ -76,9 +90,18 @@ partial struct SubModel : IChiselChild, IChiselContainer
         return cachedHash;
     }
 
+    public void Dispose()
+    {
+        throw new NotImplementedException();
+    }
+
+    NativeList<RenderSurfaceSettings>           uniqueRenderSurfaceSettings;
+    public NativeList<RenderSurfaceSettings>    UniqueRenderSurfaceSettings     { get { return uniqueRenderSurfaceSettings; } }
+    NativeList<ColliderSurfaceSettings>         uniqueColliderSurfaceSettings;
+    public NativeList<ColliderSurfaceSettings>  UniqueColliderSurfaceSettings   { get { return uniqueColliderSurfaceSettings; } }
 }
 
-partial struct Composite : IChiselChild, IChiselContainer
+partial struct ChiselCSGComposite : IChiselChild, IChiselNodeContainer
 {
     internal uint selfCachedHash;
     internal uint cachedHash;
@@ -105,7 +128,7 @@ partial struct Composite : IChiselChild, IChiselContainer
     }
 }
 
-partial struct Brush : IChiselChild
+partial struct ChiselCSGBrush : IChiselChild
 {
     public uint meshID;
     
@@ -128,7 +151,7 @@ partial struct ChiselTransformation : IChiselHash
 
 public static class IChiselContainerExtensions
 {
-    public static uint GetChildrenHashes(this IChiselContainer container)
+    public static uint GetChildrenHashes(this IChiselNodeContainer container)
     {
         uint hash = 0;
         for (int i = 0; i < container.ChildCount; i++)
