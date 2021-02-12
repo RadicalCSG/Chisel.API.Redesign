@@ -29,4 +29,10 @@ public static class UnityObjectExtensions
         UnityEngine.Object.Destroy(obj);
 #endif
     }
+
+    public static bool CanDestroy(this UnityEngine.Object obj)
+    {
+        // TODO: if this object is part of a prefab, which is not currently editable, or if the object is somehow locked, return true
+        throw new NotImplementedException();
+    }
 }
