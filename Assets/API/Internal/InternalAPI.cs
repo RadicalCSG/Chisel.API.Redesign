@@ -9,6 +9,7 @@ using Unity.Entities;
 using UnityEngine;
 using Unity.Burst;
 using Debug = UnityEngine.Debug;
+using System.Collections.Generic;
 
 partial struct ChiselCSGModel : IChiselNodeContainer, IChiselMeshContainer, IDisposable
 {
@@ -58,6 +59,36 @@ partial struct ChiselCSGModel : IChiselNodeContainer, IChiselMeshContainer, IDis
     public NativeList<RenderSurfaceSettings>    UniqueRenderSurfaceSettings     { get { return uniqueRenderSurfaceSettings; } }
     NativeList<ColliderSurfaceSettings>         uniqueColliderSurfaceSettings;
     public NativeList<ColliderSurfaceSettings>  UniqueColliderSurfaceSettings   { get { return uniqueColliderSurfaceSettings; } }
+
+
+    // TODO: implement this 
+    [BurstDiscard]
+    public GeneratedModelMeshes GetGeneratedModelMeshes()
+    {
+        throw new NotImplementedException();
+    }
+
+    // TODO: implement this 
+    [BurstDiscard]
+    public ModelBehaviour GetGameObjectForModel()
+    {
+        throw new NotImplementedException();
+    }
+
+    // TODO: implement this 
+    static readonly List<IChiselMeshContainer> s_MeshContainerList = new List<IChiselMeshContainer>();
+    [BurstDiscard]
+    public List<IChiselMeshContainer> GetMeshContainerList()
+    {
+        // Make a list of all containers
+        // TODO: instead of building this list, just manage this per model (we're already storing submodels in a list)
+        s_MeshContainerList.Clear();
+        s_MeshContainerList.Add(this);
+        for (int s = 0; s < this.SubModelCount; s++)
+            s_MeshContainerList.Add(this.GetSubModelAt(s));
+        return s_MeshContainerList;
+    }
+
 }
 
 
