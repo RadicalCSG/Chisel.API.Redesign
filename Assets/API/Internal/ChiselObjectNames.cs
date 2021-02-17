@@ -19,7 +19,7 @@ public static class ChiselObjectNames
     /// <summary>
     /// Returns a name that represents a given renderable surface (used for MeshRenderer GameObject and its mesh)
     /// </summary>
-    public static string GetName(in GeneratedComponentGroup generatedComponentGroup, in RenderSurfaceSettings renderSettings)
+    public static string GetName(GeneratedComponentGroup generatedComponentGroup, in RenderSurfaceSettings renderSettings)
     {
         if (renderSettings.debugSurfaceType != DebugSurfaceType.None)
             return $"[Debug|{renderSettings.debugSurfaceType}]";
@@ -44,7 +44,7 @@ public static class ChiselObjectNames
     /// <summary>
     /// Returns a name that represents a given collidable surface (used for MeshCollider GameObject)
     /// </summary>
-    public static string GetName(in GeneratedComponentGroup generatedComponentGroup, in ColliderSurfaceSettings colliderSettings)
+    public static string GetName(GeneratedComponentGroup generatedComponentGroup, in ColliderSurfaceSettings colliderSettings)
     {
         if (colliderSettings.layer != 0) return $"[MeshColliders]";
         else return $"[MeshColliders|layer:{colliderSettings.layer}]";
